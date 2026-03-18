@@ -1,0 +1,135 @@
+#!/bin/bash
+
+# MariaDB upgrade script - improved version with configurable versions
+# Usage: mariadb_upgrade_to <source_version> <target_version>
+
+set -e
+
+# Function to display usage
+usage() {
+    cat << EOF
+Usage: $0 <source_version> <target_version>
+
+Examples:
+  $0 10.11 11.8
+
+Description:
+  Upgrades MariaDB packages shipped in the standard repositories
+  of Fedora, CentOS Stream and RHEL from source version to target version.
+
+  Lists installed packages, maps to target versions, and runs DNF upgrade.
+EOF
+    exit 1
+}
+
+# Function to validate version format
+validate_version() {
+    local version=$1
+    if [[ ! $version =~ ^[0-9]+\.[0-9]+$ ]]; then
+        echo "Error: Version must be in format NUMBER.NUMBER (e.g., 10.11)" >&2
+        exit 1
+    fi
+}
+
+# Function to check if source packages exist
+check_source_packages() {
+    local source_version=$1
+    echo "Checking for MariaDB $source_version packages..."
+
+    # Ensure rpm command completes fully before continuing
+    local rpm_output=$(rpm -qa 2>/dev/null)
+    wait
+    local source_packages=$(echo "$rpm_output" | grep -E "^mariadb.*-${source_version}")
+    local package_count=$(echo "$source_packages" | wc -l)
+
+    if [ $package_count -eq 0 ]; then
+        echo "Error: No MariaDB $source_version packages found installed" >&2
+        exit 1
+    fi
+
+    # Display packages sorted, one per line
+    local sorted_packages=$(echo "$source_packages" | sort)
+    echo "Found $package_count MariaDB $source_version installed packages:"
+    while IFS= read -r package; do
+        echo "  $package"
+    done <<< "$sorted_packages"
+    echo
+}
+
+# Function to generate target package list
+generate_target_packages() {
+    local source_version=$1
+    local target_version=$2
+
+    local source_packages=$(rpm -qa | grep -E "^mariadb.*-${source_version}" | sed "s/-${source_version}.*//" | sort)
+
+    if [ -z "$source_packages" ]; then
+        echo "Error: No MariaDB $source_version packages found" >&2
+        exit 1
+    fi
+
+    local target_packages=""
+    while IFS= read -r package; do
+        local target_package=$(echo "$package" | sed "s/mariadb/mariadb${target_version}/")
+        target_packages="$target_packages $target_package"
+    done <<< "$source_packages"
+
+    echo "$target_packages"
+}
+
+# Main function
+main() {
+    # Check arguments
+    if [ $# -ne 2 ]; then
+        echo "Error: Exactly 2 arguments required" >&2
+        usage
+    fi
+
+    local source_version=$1
+    local target_version=$2
+
+    echo "MariaDB Upgrade: $source_version -> $target_version"
+    echo "================================================"
+
+    # Validate version formats
+    validate_version "$source_version"
+    validate_version "$target_version"
+
+    # Check source packages exist
+    check_source_packages "$source_version"
+    wait  # Ensure check_source_packages completes fully
+
+    # Generate target package list
+    local target_packages=$(generate_target_packages "$source_version" "$target_version")
+
+    # Trim leading space and display target packages one per line
+    target_packages=$(echo "$target_packages" | sed 's/^ //')
+    echo "Composing list of packages to be installed:"
+    for package in $target_packages; do
+        echo "   $package"
+    done
+    echo
+    echo "Ready to upgrade MariaDB packages."
+    echo
+    echo "This will run:"
+    echo "  dnf install --allowerasing $target_packages"
+    read -p "Continue with upgrade? (y/N): " -n 1 -r
+    echo
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Starting MariaDB upgrade..."
+        dnf install --allowerasing $target_packages
+        exit $?
+    else
+        echo "Upgrade cancelled."
+        exit 0
+    fi
+}
+
+# Show help if requested
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    usage
+fi
+
+# Run main function with all arguments
+main "$@"
