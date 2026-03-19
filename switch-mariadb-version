@@ -35,58 +35,6 @@ validate_version() {
     fi
 }
 
-# Function to find source packages from rpm output
-# Sets global SOURCE_PACKAGES array
-find_source_packages() {
-    local source_version="${1:-}"
-    local rpm_output="${2:-}"
-    local version_pattern="${source_version//./\\.}"
-
-    local matched
-    # Use grep with || true to avoid pipefail issues when no matches found
-    matched=$(echo "$rpm_output" | grep -E "^${PACKAGE_PREFIX}.*-${version_pattern}" || true)
-
-    if [ -z "$matched" ]; then
-        echo "Error: No ${NICE_NAME} $source_version packages found installed" >&2
-        exit 1
-    fi
-
-    mapfile -t SOURCE_PACKAGES < <(echo "$matched" | sort)
-}
-
-# Function to display source packages
-display_source_packages() {
-    local source_version="${1:-}"
-    echo "Checking for ${NICE_NAME} $source_version packages..."
-    echo "Found ${#SOURCE_PACKAGES[@]} ${NICE_NAME} $source_version installed packages:"
-    for package in "${SOURCE_PACKAGES[@]}"; do
-        echo "  $package"
-    done
-    echo
-}
-
-# Function to generate target package list from SOURCE_PACKAGES
-generate_target_packages() {
-    local source_version="${1:-}"
-    local target_version="${2:-}"
-
-    for package in "${SOURCE_PACKAGES[@]}"; do
-        # Strip version suffix to get base package name
-        local base_package="${package%%-"${source_version}"*}"
-
-        local target_package
-        # Check if package is versioned (starts with ${PACKAGE_PREFIX}<version>)
-        if [[ $base_package =~ ^${PACKAGE_PREFIX}${source_version}(-|$) ]]; then
-            # Versioned package: replace ${PACKAGE_PREFIX}<source_version> with ${PACKAGE_PREFIX}<target_version>
-            target_package=${base_package/${PACKAGE_PREFIX}${source_version}/${PACKAGE_PREFIX}${target_version}}
-        else
-            # Unversioned package: replace ${PACKAGE_PREFIX} with ${PACKAGE_PREFIX}<target_version>
-            target_package=${base_package/${PACKAGE_PREFIX}/${PACKAGE_PREFIX}${target_version}}
-        fi
-        printf '%s\n' "$target_package"
-    done
-}
-
 # Main function
 main() {
     # Check arguments
@@ -111,15 +59,42 @@ main() {
     validate_version "$source_version"
     validate_version "$target_version"
 
-    # Query rpm once, find and display source packages
+    # Query rpm once, find source packages
     local rpm_output
     rpm_output=$(rpm -qa 2>/dev/null)
-    find_source_packages "$source_version" "$rpm_output"
-    display_source_packages "$source_version"
+    local version_pattern="${source_version//./\\.}"
+    local matched
+    # Use grep with || true to avoid pipefail issues when no matches found
+    matched=$(echo "$rpm_output" | grep -E "^${PACKAGE_PREFIX}.*-${version_pattern}" || true)
+
+    if [ -z "$matched" ]; then
+        echo "Error: No ${NICE_NAME} $source_version packages found installed" >&2
+        exit 1
+    fi
+
+    local -a source_packages
+    mapfile -t source_packages < <(echo "$matched" | sort)
+
+    # Display source packages
+    echo "Checking for ${NICE_NAME} $source_version packages..."
+    echo "Found ${#source_packages[@]} ${NICE_NAME} $source_version installed packages:"
+    for package in "${source_packages[@]}"; do
+        echo "  $package"
+    done
+    echo
 
     # Generate target package list
     local -a target_packages
-    mapfile -t target_packages < <(generate_target_packages "$source_version" "$target_version")
+    for package in "${source_packages[@]}"; do
+        local base_package="${package%%-"${source_version}"*}"
+        local target_package
+        if [[ $base_package =~ ^${PACKAGE_PREFIX}${source_version}(-|$) ]]; then
+            target_package=${base_package/${PACKAGE_PREFIX}${source_version}/${PACKAGE_PREFIX}${target_version}}
+        else
+            target_package=${base_package/${PACKAGE_PREFIX}/${PACKAGE_PREFIX}${target_version}}
+        fi
+        target_packages+=("$target_package")
+    done
 
     # Display target packages one per line
     echo "Composing list of packages to be installed:"
