@@ -137,7 +137,7 @@ main() {
     echo
     echo "This will run:"
     echo "  dnf install --allowerasing $target_packages"
-    read -p "Continue with upgrade? (y/N): " -n 1 -r
+    read -p "Continue with version switch? (y/N): " -r
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
