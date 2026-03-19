@@ -65,7 +65,7 @@ main() {
     local version_pattern="${source_version//./\\.}"
     local matched
     # Use grep with || true to avoid pipefail issues when no matches found
-    matched=$(echo "$rpm_output" | grep -E "^${PACKAGE_PREFIX}.*-${version_pattern}" || true)
+    matched=$(grep -E "^${PACKAGE_PREFIX}.*-${version_pattern}" <<< "$rpm_output" || true)
 
     if [ -z "$matched" ]; then
         echo "Error: No ${NICE_NAME} $source_version packages found installed" >&2
@@ -73,7 +73,7 @@ main() {
     fi
 
     local -a source_packages
-    mapfile -t source_packages < <(echo "$matched" | sort)
+    mapfile -t source_packages < <(sort <<< "$matched")
 
     # Display source packages
     echo "Checking for ${NICE_NAME} $source_version packages..."
@@ -85,9 +85,9 @@ main() {
 
     # Generate target package list
     local -a target_packages
+    local base_package target_package
     for package in "${source_packages[@]}"; do
-        local base_package="${package%%-"${source_version}"*}"
-        local target_package
+        base_package="${package%%-"${source_version}"*}"
         if [[ $base_package =~ ^${PACKAGE_PREFIX}${source_version}(-|$) ]]; then
             target_package=${base_package/${PACKAGE_PREFIX}${source_version}/${PACKAGE_PREFIX}${target_version}}
         else
@@ -111,8 +111,7 @@ main() {
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Starting ${NICE_NAME} version switch..."
-        dnf install --allowerasing "${target_packages[@]}"
-        exit $?
+        exec dnf install --allowerasing "${target_packages[@]}"
     else
         echo "Version switch cancelled."
         exit 1
