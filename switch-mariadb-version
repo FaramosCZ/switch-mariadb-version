@@ -68,7 +68,7 @@ generate_target_packages() {
 
     local source_packages
     # Use grep with || true to avoid pipefail issues when no matches found
-    source_packages=$(rpm -qa | grep -E "^mariadb.*-${source_version}" | sed "s/-${source_version}.*//" | sort || true)
+    source_packages=$(rpm_output=$(rpm -qa); echo "$rpm_output" | grep -E "^mariadb.*-${source_version}" | sed -E "s/-${source_version}.*//; s/^mariadb[0-9.]*/mariadb/" | sort -u || true)
 
     if [ -z "$source_packages" ]; then
         echo "Error: No MariaDB $source_version packages found" >&2
@@ -87,9 +87,15 @@ generate_target_packages() {
 
 # Main function
 main() {
+
     # Check arguments
     if [ $# -ne 2 ]; then
         echo "Error: Exactly 2 arguments required" >&2
+        usage
+    fi
+
+    # Show help if requested
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
         usage
     fi
 
@@ -143,11 +149,6 @@ main() {
         exit 0
     fi
 }
-
-# Show help if requested
-if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-    usage
-fi
 
 # Run main function with all arguments
 main "$@"
