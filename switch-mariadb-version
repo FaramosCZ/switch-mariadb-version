@@ -69,12 +69,10 @@ display_source_packages() {
 generate_target_packages() {
     local source_version="${1:-}"
     local target_version="${2:-}"
-    local version_pattern="${source_version//./\\.}"
 
     for package in "${SOURCE_PACKAGES[@]}"; do
         # Strip version suffix to get base package name
-        local base_package
-        base_package=$(echo "$package" | sed "s/-${version_pattern}.*//")
+        local base_package="${package%%-"${source_version}"*}"
 
         local target_package
         # Check if package is versioned (starts with ${PACKAGE_PREFIX}<version>)
