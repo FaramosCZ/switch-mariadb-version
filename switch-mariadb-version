@@ -37,18 +37,22 @@ check_source_packages() {
     echo "Checking for MariaDB $source_version packages..."
 
     # Ensure rpm command completes fully before continuing
-    local rpm_output=$(rpm -qa 2>/dev/null)
+    local rpm_output
+    rpm_output=$(rpm -qa 2>/dev/null)
     wait
-    local source_packages=$(echo "$rpm_output" | grep -E "^mariadb.*-${source_version}")
-    local package_count=$(echo "$source_packages" | wc -l)
+    local source_packages
+    source_packages=$(echo "$rpm_output" | grep -E "^mariadb.*-${source_version}")
+    local package_count
+    package_count=$(echo "$source_packages" | wc -l)
 
-    if [ $package_count -eq 0 ]; then
+    if [ "$package_count" -eq 0 ]; then
         echo "Error: No MariaDB $source_version packages found installed" >&2
         exit 1
     fi
 
     # Display packages sorted, one per line
-    local sorted_packages=$(echo "$source_packages" | sort)
+    local sorted_packages
+    sorted_packages=$(echo "$source_packages" | sort)
     echo "Found $package_count MariaDB $source_version installed packages:"
     while IFS= read -r package; do
         echo "  $package"
@@ -61,7 +65,8 @@ generate_target_packages() {
     local source_version=$1
     local target_version=$2
 
-    local source_packages=$(rpm -qa | grep -E "^mariadb.*-${source_version}" | sed "s/-${source_version}.*//" | sort)
+    local source_packages
+    source_packages=$(rpm -qa | grep -E "^mariadb.*-${source_version}" | sed "s/-${source_version}.*//" | sort)
 
     if [ -z "$source_packages" ]; then
         echo "Error: No MariaDB $source_version packages found" >&2
@@ -70,7 +75,8 @@ generate_target_packages() {
 
     local target_packages=""
     while IFS= read -r package; do
-        local target_package=$(echo "$package" | sed "s/mariadb/mariadb${target_version}/")
+        local target_package
+        target_package=${package/mariadb/mariadb${target_version}}
         target_packages="$target_packages $target_package"
     done <<< "$source_packages"
 
@@ -100,10 +106,11 @@ main() {
     wait  # Ensure check_source_packages completes fully
 
     # Generate target package list
-    local target_packages=$(generate_target_packages "$source_version" "$target_version")
+    local target_packages
+    target_packages=$(generate_target_packages "$source_version" "$target_version")
 
     # Trim leading space and display target packages one per line
-    target_packages=$(echo "$target_packages" | sed 's/^ //')
+    target_packages=${target_packages# }
     echo "Composing list of packages to be installed:"
     for package in $target_packages; do
         echo "   $package"
@@ -118,6 +125,7 @@ main() {
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Starting MariaDB upgrade..."
+        # shellcheck disable=SC2086 # We want word splitting for package names
         dnf install --allowerasing $target_packages
         exit $?
     else
