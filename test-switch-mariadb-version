@@ -1,0 +1,117 @@
+#!/bin/bash
+
+# Test suite for switch-mariadb-version
+# Run as root on a machine with MariaDB packages installed
+
+set -uo pipefail
+
+CMD=/usr/bin/switch-mariadb-version
+PASS=0
+FAIL=0
+
+assert_exit() {
+    local description="$1"
+    local expected="$2"
+    local actual="$3"
+
+    if [ "$actual" -eq "$expected" ]; then
+        echo "PASS: $description (exit=$actual)"
+        ((PASS++))
+    else
+        echo "FAIL: $description (expected=$expected, got=$actual)"
+        ((FAIL++))
+    fi
+}
+
+run() {
+    local description="$1"
+    local expected_exit="$2"
+    shift 2
+    "$@" >/dev/null 2>&1
+    assert_exit "$description" "$expected_exit" "$?"
+}
+
+run_with_stdin() {
+    local description="$1"
+    local expected_exit="$2"
+    local stdin="$3"
+    shift 3
+    printf '%s\n' "$stdin" | "$@" >/dev/null 2>&1
+    assert_exit "$description" "$expected_exit" "$?"
+}
+
+# Like run_with_stdin but sends "y" for both script prompt and dnf prompt
+run_with_dnf() {
+    local description="$1"
+    local expected_exit="$2"
+    shift 2
+    printf 'y\ny\n' | "$@" >/dev/null 2>&1
+    assert_exit "$description" "$expected_exit" "$?"
+}
+
+echo "=== Testing switch-mariadb-version ==="
+echo
+
+# --- Setup: remove all mariadb packages ---
+echo "--- Setup: removing all mariadb packages ---"
+dnf remove -y "mariadb*" >/dev/null 2>&1
+rpm -qa | grep -i -e maria -e mysql | sort
+echo
+
+# Exit 0: --help
+run "--help flag" 0 "$CMD" --help
+run "-h flag" 0 "$CMD" -h
+
+# Exit 1: wrong number of arguments
+run "no arguments" 1 "$CMD"
+run "one argument" 1 "$CMD" 11.8
+run "three arguments" 1 "$CMD" 11.8 11.4 10.11
+run "empty string as sole arg" 1 "$CMD" ""
+
+# Exit 2: invalid version format
+run "letters as source version" 2 "$CMD" abc 11.8
+run "letters as target version" 2 "$CMD" 11.8 abc
+run "number without dot (source)" 2 "$CMD" 11 11.8
+run "number without dot (target)" 2 "$CMD" 11.8 11
+run "triple version" 2 "$CMD" 11.8.1 11.4
+run "dot only" 2 "$CMD" . 11.8
+run "valid source, bad target" 2 "$CMD" 11.8 foo
+run "bad source, valid target" 2 "$CMD" foo 11.8
+
+# Exit 3: no source packages found
+run "nonexistent version" 3 "$CMD" 99.99 11.8
+run "plausible but absent version" 3 "$CMD" 10.5 11.8
+run "no mariadb installed at all" 3 "$CMD" 10.11 11.8
+
+# --- Setup: install mariadb 10.11 ---
+echo
+echo "--- Setup: installing mariadb 10.11 ---"
+dnf install -y mariadb10.11-server mariadb10.11-pam mariadb10.11-devel >/dev/null 2>&1
+rpm -qa | grep -i -e maria -e mysql | sort
+echo
+
+# Exit 4: user cancelled (send 'n' to the prompt)
+run_with_stdin "user cancels with n" 4 "n" "$CMD" 10.11 11.8
+run_with_stdin "user cancels with empty" 4 "" "$CMD" 10.11 11.8
+run_with_stdin "user cancels with N" 4 "N" "$CMD" 10.11 11.8
+run_with_stdin "user cancels with x" 4 "x" "$CMD" 10.11 11.8
+
+# Exit 5: dnf failed (target version packages don't exist in repos)
+run_with_dnf "dnf fails on nonexistent target" 5 "$CMD" 10.11 99.99
+
+# --- Positive test: upgrade 10.11 -> 11.8 ---
+echo
+echo "--- Positive test: upgrade 10.11 -> 11.8 ---"
+run_with_dnf "upgrade 10.11 to 11.8" 0 "$CMD" 10.11 11.8
+rpm -qa | grep -i -e maria -e mysql | sort
+
+# --- Positive test: downgrade 11.8 -> 10.11 ---
+# Disabled: external bug - dnf fails on downgrade (exit=5)
+# echo
+# echo "--- Positive test: downgrade 11.8 -> 10.11 ---"
+# run_with_dnf "downgrade 11.8 to 10.11" 0 "$CMD" 11.8 10.11
+# rpm -qa | grep -i -e maria -e mysql | sort
+
+echo
+echo "=== Results: $PASS passed, $FAIL failed ==="
+exit "$FAIL"
