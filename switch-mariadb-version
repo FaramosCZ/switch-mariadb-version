@@ -79,7 +79,6 @@ generate_target_packages() {
         exit 1
     fi
 
-    local target_packages=""
     while IFS= read -r package; do
         local target_package
         # Check if package is versioned (starts with ${PACKAGE_PREFIX}<version>)
@@ -90,10 +89,8 @@ generate_target_packages() {
             # Unversioned package: replace ${PACKAGE_PREFIX} with ${PACKAGE_PREFIX}<target_version>
             target_package=${package/${PACKAGE_PREFIX}/${PACKAGE_PREFIX}${target_version}}
         fi
-        target_packages="$target_packages $target_package"
+        printf '%s\n' "$target_package"
     done <<< "$source_packages"
-
-    echo "$target_packages"
 }
 
 # Main function
@@ -124,30 +121,25 @@ main() {
     check_source_packages "$source_version"
 
     # Generate target package list
-    local target_packages
-    target_packages=$(generate_target_packages "$source_version" "$target_version")
+    local -a target_packages
+    mapfile -t target_packages < <(generate_target_packages "$source_version" "$target_version")
 
-    # Trim leading space and display target packages one per line
-    target_packages=${target_packages# }
+    # Display target packages one per line
     echo "Composing list of packages to be installed:"
-    # Convert space-separated list to array for safe iteration
-    local -a package_array
-    read -ra package_array <<< "$target_packages"
-    for package in "${package_array[@]}"; do
+    for package in "${target_packages[@]}"; do
         echo "   $package"
     done
     echo
     echo "Ready to switch ${NICE_NAME} packages."
     echo
     echo "This will run:"
-    echo "  dnf install --allowerasing $target_packages"
+    echo "  dnf install --allowerasing ${target_packages[*]}"
     read -p "Continue with version switch? (y/N): " -r
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Starting ${NICE_NAME} version switch..."
-        # shellcheck disable=SC2086 # We want word splitting for package names
-        dnf install --allowerasing $target_packages
+        dnf install --allowerasing "${target_packages[@]}"
         exit $?
     else
         echo "Version switch cancelled."
