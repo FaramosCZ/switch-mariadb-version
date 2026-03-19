@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# MariaDB upgrade script - improved version with configurable versions
-# Usage: mariadb_upgrade_to <source_version> <target_version>
+# MariaDB version switch script - configurable version switching
+# Usage: switch-mariadb-version <source_version> <target_version>
 
 set -euo pipefail
 
@@ -14,10 +14,10 @@ Examples:
   $0 10.11 11.8
 
 Description:
-  Upgrades MariaDB packages shipped in the standard repositories
+  Switches MariaDB packages shipped in the standard repositories
   of Fedora, CentOS Stream and RHEL from source version to target version.
 
-  Lists installed packages, maps to target versions, and runs DNF upgrade.
+  Lists installed packages, maps to target versions, and runs DNF install.
 EOF
     exit 1
 }
@@ -102,8 +102,8 @@ main() {
         usage
     fi
 
-    echo "MariaDB Upgrade: $source_version -> $target_version"
-    echo "================================================"
+    echo "MariaDB Version Switch: $source_version -> $target_version"
+    echo "======================================================"
 
     # Validate version formats
     validate_version "$source_version"
@@ -126,20 +126,20 @@ main() {
         echo "   $package"
     done
     echo
-    echo "Ready to upgrade MariaDB packages."
+    echo "Ready to switch MariaDB packages."
     echo
     echo "This will run:"
     echo "  dnf install --allowerasing $target_packages"
-    read -p "Continue with upgrade? (y/N): " -n 1 -r
+    read -p "Continue with version switch? (y/N): " -n 1 -r
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Starting MariaDB upgrade..."
+        echo "Starting MariaDB version switch..."
         # shellcheck disable=SC2086 # We want word splitting for package names
         dnf install --allowerasing $target_packages
         exit $?
     else
-        echo "Upgrade cancelled."
+        echo "Version switch cancelled."
         exit 0
     fi
 }
