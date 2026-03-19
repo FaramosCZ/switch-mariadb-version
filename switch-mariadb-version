@@ -44,8 +44,9 @@ check_source_packages() {
     local rpm_output
     rpm_output=$(rpm -qa 2>/dev/null)
     local source_packages
+    local version_pattern="${source_version//./\\.}"
     # Use grep with || true to avoid pipefail issues when no matches found
-    source_packages=$(echo "$rpm_output" | grep -E "^${PACKAGE_PREFIX}.*-${source_version}" || true)
+    source_packages=$(echo "$rpm_output" | grep -E "^${PACKAGE_PREFIX}.*-${version_pattern}" || true)
 
     # Check if we found any packages (handle empty result correctly)
     if [ -z "$source_packages" ]; then
@@ -71,8 +72,9 @@ generate_target_packages() {
     local target_version="${2:-}"
 
     local source_packages
+    local version_pattern="${source_version//./\\.}"
     # Use grep with || true to avoid pipefail issues when no matches found
-    source_packages=$(rpm -qa | grep -E "^${PACKAGE_PREFIX}.*-${source_version}" | sed "s/-${source_version}.*//" | sort || true)
+    source_packages=$(rpm -qa | grep -E "^${PACKAGE_PREFIX}.*-${version_pattern}" | sed "s/-${version_pattern}.*//" | sort || true)
 
     if [ -z "$source_packages" ]; then
         echo "Error: No ${NICE_NAME} $source_version packages found" >&2
