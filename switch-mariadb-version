@@ -142,7 +142,7 @@ main() {
         exit $?
     else
         echo "Version switch cancelled."
-        exit 0
+        exit 1
     fi
 }
 
