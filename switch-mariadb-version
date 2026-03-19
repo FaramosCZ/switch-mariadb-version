@@ -78,7 +78,14 @@ generate_target_packages() {
     local target_packages=""
     while IFS= read -r package; do
         local target_package
-        target_package=${package/mariadb/mariadb${target_version}}
+        # Check if package is versioned (starts with mariadb<version>)
+        if [[ $package =~ ^mariadb${source_version}(-|$) ]]; then
+            # Versioned package: replace mariadb<source_version> with mariadb<target_version>
+            target_package=${package/mariadb${source_version}/mariadb${target_version}}
+        else
+            # Unversioned package: replace mariadb with mariadb<target_version>
+            target_package=${package/mariadb/mariadb${target_version}}
+        fi
         target_packages="$target_packages $target_package"
     done <<< "$source_packages"
 
