@@ -3,7 +3,7 @@
 # MariaDB upgrade script - improved version with configurable versions
 # Usage: mariadb_upgrade_to <source_version> <target_version>
 
-set -e
+set -euo pipefail
 
 # Function to display usage
 usage() {
@@ -24,7 +24,7 @@ EOF
 
 # Function to validate version format
 validate_version() {
-    local version=$1
+    local version="${1:-}"
     if [[ ! $version =~ ^[0-9]+\.[0-9]+$ ]]; then
         echo "Error: Version must be in format NUMBER.NUMBER (e.g., 10.11)" >&2
         exit 1
@@ -33,19 +33,18 @@ validate_version() {
 
 # Function to check if source packages exist
 check_source_packages() {
-    local source_version=$1
+    local source_version="${1:-}"
     echo "Checking for MariaDB $source_version packages..."
 
-    # Ensure rpm command completes fully before continuing
+    # Get installed packages
     local rpm_output
     rpm_output=$(rpm -qa 2>/dev/null)
-    wait
     local source_packages
-    source_packages=$(echo "$rpm_output" | grep -E "^mariadb.*-${source_version}")
-    local package_count
-    package_count=$(echo "$source_packages" | wc -l)
+    # Use grep with || true to avoid pipefail issues when no matches found
+    source_packages=$(echo "$rpm_output" | grep -E "^mariadb.*-${source_version}" || true)
 
-    if [ "$package_count" -eq 0 ]; then
+    # Check if we found any packages (handle empty result correctly)
+    if [ -z "$source_packages" ]; then
         echo "Error: No MariaDB $source_version packages found installed" >&2
         exit 1
     fi
@@ -53,6 +52,8 @@ check_source_packages() {
     # Display packages sorted, one per line
     local sorted_packages
     sorted_packages=$(echo "$source_packages" | sort)
+    local package_count
+    package_count=$(echo "$source_packages" | wc -l)
     echo "Found $package_count MariaDB $source_version installed packages:"
     while IFS= read -r package; do
         echo "  $package"
@@ -62,11 +63,12 @@ check_source_packages() {
 
 # Function to generate target package list
 generate_target_packages() {
-    local source_version=$1
-    local target_version=$2
+    local source_version="${1:-}"
+    local target_version="${2:-}"
 
     local source_packages
-    source_packages=$(rpm -qa | grep -E "^mariadb.*-${source_version}" | sed "s/-${source_version}.*//" | sort)
+    # Use grep with || true to avoid pipefail issues when no matches found
+    source_packages=$(rpm -qa | grep -E "^mariadb.*-${source_version}" | sed "s/-${source_version}.*//" | sort || true)
 
     if [ -z "$source_packages" ]; then
         echo "Error: No MariaDB $source_version packages found" >&2
@@ -91,8 +93,14 @@ main() {
         usage
     fi
 
-    local source_version=$1
-    local target_version=$2
+    local source_version="$1"
+    local target_version="$2"
+
+    # Check for empty arguments
+    if [ -z "$source_version" ] || [ -z "$target_version" ]; then
+        echo "Error: Both source and target versions must be non-empty" >&2
+        usage
+    fi
 
     echo "MariaDB Upgrade: $source_version -> $target_version"
     echo "================================================"
@@ -103,7 +111,6 @@ main() {
 
     # Check source packages exist
     check_source_packages "$source_version"
-    wait  # Ensure check_source_packages completes fully
 
     # Generate target package list
     local target_packages
@@ -112,7 +119,10 @@ main() {
     # Trim leading space and display target packages one per line
     target_packages=${target_packages# }
     echo "Composing list of packages to be installed:"
-    for package in $target_packages; do
+    # Convert space-separated list to array for safe iteration
+    local -a package_array
+    read -ra package_array <<< "$target_packages"
+    for package in "${package_array[@]}"; do
         echo "   $package"
     done
     echo
