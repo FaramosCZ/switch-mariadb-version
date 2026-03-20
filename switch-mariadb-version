@@ -113,7 +113,9 @@ main() {
     echo "Ready to switch ${NICE_NAME} packages."
     echo
     echo "This will run:"
+    echo
     echo "  dnf install --allowerasing ${target_packages[*]}"
+    echo
     read -p "Continue with version switch? (y/N): " -r
     echo
 
