@@ -99,6 +99,13 @@ run_with_stdin "user cancels with x" 4 "x" "$CMD" 10.11 11.8
 # Exit 5: dnf failed (target version packages don't exist in repos)
 run_with_dnf "dnf fails on nonexistent target" 5 "$CMD" 10.11 99.99
 
+# --- Positive test: same version 10.11 -> 10.11 ---
+# Should finish successfully with DNF reproting "Package ... is already installed. Nothing to do."
+echo
+echo "--- Positive test: same version 10.11 -> 10.11 ---"
+run_with_dnf "same version 10.11 to 10.11" 0 "$CMD" 10.11 10.11
+rpm -qa | grep -i -e maria -e mysql | sort
+
 # --- Positive test: upgrade 10.11 -> 11.8 ---
 echo
 echo "--- Positive test: upgrade 10.11 -> 11.8 ---"
