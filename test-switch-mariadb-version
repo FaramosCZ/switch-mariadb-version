@@ -82,6 +82,7 @@ run "bad source, valid target" 2 "$CMD" foo 11.8
 run "nonexistent version" 3 "$CMD" 99.99 11.8
 run "plausible but absent version" 3 "$CMD" 10.5 11.8
 run "no mariadb installed at all" 3 "$CMD" 10.11 11.8
+run "substring version 10.1 not matching 10.11" 3 "$CMD" 10.1 10.1
 
 # --- Setup: install mariadb 10.11 ---
 echo
